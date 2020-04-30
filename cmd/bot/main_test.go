@@ -21,11 +21,17 @@ func TestParseArgs(t *testing.T) {
 		},
 		{
 			name: "all",
-			args: []string{"-telegram.api-token", "abc", "-transmission.url", "http://example.com:1234", "-verbose"},
+			args: []string{
+				"-telegram.api-token", "abc",
+				"-telegram.allow-user", "testuser",
+				"-transmission.url", "http://example.com:1234",
+				"-verbose",
+			},
 			want: &config{
-				TelegramAPIToken: "abc",
-				TransmissionURL:  "http://example.com:1234",
-				Verbose:          true,
+				TelegramAPIToken:  "abc",
+				TelegramAllowUser: "testuser",
+				TransmissionURL:   "http://example.com:1234",
+				Verbose:           true,
 			},
 		},
 	}

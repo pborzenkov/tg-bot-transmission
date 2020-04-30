@@ -18,8 +18,9 @@ var (
 )
 
 type config struct {
-	TelegramAPIToken string
-	TransmissionURL  string
+	TelegramAPIToken  string
+	TelegramAllowUser string
+	TransmissionURL   string
 
 	Verbose bool
 }
@@ -31,6 +32,8 @@ func parseArgs(progname string, args []string) (*config, string, error) {
 
 	var conf config
 	flags.StringVar(&conf.TelegramAPIToken, "telegram.api-token", "", "Telegram Bot API token (required)")
+	flags.StringVar(&conf.TelegramAllowUser, "telegram.allow-user", "",
+		"Telegram username that's allowed to control the bot")
 	flags.StringVar(&conf.TransmissionURL, "transmission.url", "http://localhost:9091", "Transmission RPC server URL")
 	flags.BoolVar(&conf.Verbose, "verbose", false, "Enable verbose logging")
 
@@ -56,7 +59,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to initialize Transmission client: %v\n", err)
 		os.Exit(1)
 	}
-	bot, err := bot.New(conf.TelegramAPIToken, trans, bot.WithLogger(log))
+	bot, err := bot.New(conf.TelegramAPIToken, trans,
+		bot.WithLogger(log),
+		bot.WithAllowedUser(conf.TelegramAllowUser),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize bot: %v\n", err)
 		os.Exit(1)

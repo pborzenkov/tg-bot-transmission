@@ -2,6 +2,8 @@ package bot
 
 type config struct {
 	Log Logger
+
+	AllowedUsers []string
 }
 
 func defaultConfig() *config {
@@ -27,5 +29,13 @@ func WithLogger(l Logger) Option {
 		if l != nil {
 			c.Log = l
 		}
+	})
+}
+
+// WithAllowedUser add user to the list of username that are allowed to speak
+// with the bot.
+func WithAllowedUser(user string) Option {
+	return optionFunc(func(c *config) {
+		c.AllowedUsers = append(c.AllowedUsers, user)
 	})
 }
