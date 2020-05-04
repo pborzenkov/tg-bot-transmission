@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -9,8 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/pborzenkov/go-transmission/transmission"
 	"github.com/pborzenkov/tg-bot-transmission/pkg/bot"
+	"github.com/peterbourgon/ff/v3"
+	"github.com/peterbourgon/ff/v3/ffcli"
 )
 
 var (
@@ -18,65 +20,72 @@ var (
 )
 
 type config struct {
-	TelegramAPIToken  string
-	TelegramAllowUser string
-	TransmissionURL   string
-
-	Verbose bool
+	APIToken        string
+	AllowUser       string
+	TransmissionURL string
+	Verbose         bool
 }
 
-func parseArgs(progname string, args []string) (*config, string, error) {
-	buf := new(bytes.Buffer)
-	flags := flag.NewFlagSet(progname, flag.ContinueOnError)
-	flags.SetOutput(buf)
-
-	var conf config
-	flags.StringVar(&conf.TelegramAPIToken, "telegram.api-token", "", "Telegram Bot API token (required)")
-	flags.StringVar(&conf.TelegramAllowUser, "telegram.allow-user", "",
+func (c *config) command() *ffcli.Command {
+	fs := flag.NewFlagSet("bot", flag.ExitOnError)
+	fs.StringVar(&c.APIToken, "telegram.api-token", "", "Telegram Bot API token")
+	fs.StringVar(&c.AllowUser, "telegram.allow-user", "",
 		"Telegram username that's allowed to control the bot")
-	flags.StringVar(&conf.TransmissionURL, "transmission.url", "http://localhost:9091", "Transmission RPC server URL")
-	flags.BoolVar(&conf.Verbose, "verbose", false, "Enable verbose logging")
+	fs.StringVar(&c.TransmissionURL, "transmission.url", "http://localhost:9091",
+		"Transmission RPC server URL")
+	fs.BoolVar(&c.Verbose, "verbose", false, "Enable verbose logging")
 
-	if err := flags.Parse(args); err != nil {
-		return nil, buf.String(), err
+	root := &ffcli.Command{
+		Name:       "bot",
+		ShortUsage: "bot [flags]",
+		FlagSet:    fs,
+		Options: []ff.Option{
+			ff.WithEnvVarPrefix("BOT"),
+		},
+		Exec: c.exec,
 	}
 
-	return &conf, buf.String(), nil
+	return root
 }
 
 func main() {
-	conf, out, err := parseArgs(os.Args[0], os.Args[1:])
-	if err != nil {
-		fmt.Println(out)
-		os.Exit(1)
-	}
-
-	log := newLogger(os.Stdout, conf.Verbose)
-	log.Infof("starting, version %q", Version)
-
-	trans, err := transmission.New(conf.TransmissionURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize Transmission client: %v\n", err)
-		os.Exit(1)
-	}
-	bot, err := bot.New(conf.TelegramAPIToken, trans,
-		bot.WithLogger(log),
-		bot.WithAllowedUser(conf.TelegramAllowUser),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize bot: %v\n", err)
-		os.Exit(1)
-	}
+	cfg := new(config)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT)
 	go func() {
 		<-sig
-		log.Infof("got Ctrl-C, stopping")
 		cancel()
 	}()
 
-	log.Infof("initialized, staring main loop")
+	if err := cfg.command().ParseAndRun(ctx, os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func (c *config) exec(ctx context.Context, args []string) error {
+	log := newLogger(os.Stdout, c.Verbose)
+	log.Infof("starting, version %q", Version)
+
+	tg, err := tgbotapi.NewBotAPI(c.APIToken)
+	if err != nil {
+		return fmt.Errorf("tgbotapi.NewBotAPI: %v", err)
+	}
+	trans, err := transmission.New(c.TransmissionURL)
+	if err != nil {
+		return fmt.Errorf("transmission.New: %v", err)
+	}
+	bot, err := bot.New(tg, trans,
+		bot.WithLogger(log),
+		bot.WithAllowedUser(c.AllowUser),
+	)
+	if err != nil {
+		return fmt.Errorf("bot.New: %v", err)
+	}
+
+	log.Debugf("initialized, staring main loop")
 	bot.Run(ctx)
+	return nil
 }

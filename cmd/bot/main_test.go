@@ -1,54 +1,71 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestParseArgs(t *testing.T) {
+func TestConfig(t *testing.T) {
 	var tests = []struct {
 		name string
 		args []string
+		env  []string
 		want *config
 	}{
 		{
-			name: "empty",
-			args: []string{},
+			name: "flags",
+			args: []string{
+				"-verbose",
+				"-telegram.api-token", "abcde",
+				"-telegram.allow-user", "user1",
+				"-transmission.url", "http://example.com:1234",
+			},
 			want: &config{
-				TransmissionURL: "http://localhost:9091",
+				Verbose:         true,
+				APIToken:        "abcde",
+				AllowUser:       "user1",
+				TransmissionURL: "http://example.com:1234",
 			},
 		},
 		{
-			name: "all",
-			args: []string{
-				"-telegram.api-token", "abc",
-				"-telegram.allow-user", "testuser",
-				"-transmission.url", "http://example.com:1234",
-				"-verbose",
+			name: "env",
+			env: []string{
+				"BOT_VERBOSE", "true",
+				"BOT_TELEGRAM_API_TOKEN", "abcde",
+				"BOT_TELEGRAM_ALLOW_USER", "user1",
+				"BOT_TRANSMISSION_URL", "http://example.com:1234",
 			},
 			want: &config{
-				TelegramAPIToken:  "abc",
-				TelegramAllowUser: "testuser",
-				TransmissionURL:   "http://example.com:1234",
-				Verbose:           true,
+				Verbose:         true,
+				APIToken:        "abcde",
+				AllowUser:       "user1",
+				TransmissionURL: "http://example.com:1234",
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
-
 		t.Run(tc.name, func(t *testing.T) {
-			conf, out, err := parseArgs("prog", tc.args)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
+			unset := make([]string, 0)
+			for i := 0; i < len(tc.env); i += 2 {
+				unset = append(unset, tc.env[i])
+				os.Setenv(tc.env[i], tc.env[i+1])
 			}
-			if out != "" {
-				t.Errorf("unexpected output: %q", err)
+			defer func() {
+				for _, e := range unset {
+					os.Unsetenv(e)
+				}
+			}()
+
+			cfg := new(config)
+			if err := cfg.command().Parse(tc.args); err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
-			if !cmp.Equal(tc.want, conf) {
-				t.Errorf("unexpected result, diff = \n%v", cmp.Diff(tc.want, conf))
+			if !cmp.Equal(tc.want, cfg) {
+				t.Errorf("unexpected config, diff = \n%s", cmp.Diff(tc.want, cfg))
 			}
 		})
 	}

@@ -21,8 +21,8 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name: "allowed_users",
-			opts: []Option{WithAllowedUser("user1"), WithAllowedUser("user2")},
-			want: &config{AllowedUsers: []string{"user1", "user2"}},
+			opts: []Option{WithAllowedUser("user1")},
+			want: &config{AllowedUser: "user1"},
 		},
 	}
 

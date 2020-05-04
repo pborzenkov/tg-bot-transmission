@@ -3,7 +3,7 @@ package bot
 type config struct {
 	Log Logger
 
-	AllowedUsers []string
+	AllowedUser string
 }
 
 func defaultConfig() *config {
@@ -32,10 +32,10 @@ func WithLogger(l Logger) Option {
 	})
 }
 
-// WithAllowedUser add user to the list of username that are allowed to speak
-// with the bot.
+// WithAllowedUser sets a username of the telegram account that is allowed to
+// control the bot.
 func WithAllowedUser(user string) Option {
 	return optionFunc(func(c *config) {
-		c.AllowedUsers = append(c.AllowedUsers, user)
+		c.AllowedUser = user
 	})
 }
