@@ -77,15 +77,10 @@ func (c *config) exec(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("transmission.New: %v", err)
 	}
-	bot, err := bot.New(tg, trans,
+	bot.New(tg, trans,
 		bot.WithLogger(log),
 		bot.WithAllowedUser(c.AllowUser),
-	)
-	if err != nil {
-		return fmt.Errorf("bot.New: %v", err)
-	}
+	).Run(ctx)
 
-	log.Debugf("initialized, staring main loop")
-	bot.Run(ctx)
 	return nil
 }

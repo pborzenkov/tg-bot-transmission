@@ -35,7 +35,7 @@ type Bot struct {
 
 // New returns new instance of the Bot with the given token that talks to
 // Transmission client using transmission.
-func New(tg Telegram, transmission Transmission, opts ...Option) (*Bot, error) {
+func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 	conf := defaultConfig()
 	for _, opt := range opts {
 		opt.apply(conf)
@@ -49,7 +49,7 @@ func New(tg Telegram, transmission Transmission, opts ...Option) (*Bot, error) {
 		admin: conf.AllowedUser,
 	}
 
-	return b, nil
+	return b
 }
 
 // Run runs the bot until ctx is cancelled.

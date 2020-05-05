@@ -20,7 +20,7 @@ func TestConfig(t *testing.T) {
 			want: &config{Log: testLogger},
 		},
 		{
-			name: "allowed_users",
+			name: "allowed_user",
 			opts: []Option{WithAllowedUser("user1")},
 			want: &config{AllowedUser: "user1"},
 		},
