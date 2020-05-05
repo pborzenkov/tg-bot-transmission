@@ -21,9 +21,6 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - uses: actions/checkout@v2
 
-      - name: Ensure generated files are up-to-date
-        run: go generate ./... && git diff --exit-code
-
       - run: go test -race -cover ./...
 
 # vim: set ts=2 sw=2 expandtab:
