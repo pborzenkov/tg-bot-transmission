@@ -1,14 +1,19 @@
 package bot
 
-type config struct {
-	Log Logger
+import (
+	"net/http"
+)
 
+type config struct {
+	Log         Logger
 	AllowedUser string
+	HTTPClient  *http.Client
 }
 
 func defaultConfig() *config {
 	return &config{
-		Log: noopLogger{},
+		Log:        noopLogger{},
+		HTTPClient: http.DefaultClient,
 	}
 }
 
@@ -37,5 +42,14 @@ func WithLogger(l Logger) Option {
 func WithAllowedUser(user string) Option {
 	return optionFunc(func(c *config) {
 		c.AllowedUser = user
+	})
+}
+
+// WithHTTPClient sets an HTTP client for the bot.
+func WithHTTPClient(client *http.Client) Option {
+	return optionFunc(func(c *config) {
+		if client != nil {
+			c.HTTPClient = client
+		}
 	})
 }

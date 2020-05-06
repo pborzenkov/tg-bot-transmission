@@ -2,12 +2,23 @@
 package bot
 
 import (
+	"bytes"
 	"context"
-	"strings"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"regexp"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/golang/mock/gomock"
+	"github.com/pborzenkov/go-transmission/transmission"
+)
+
+var (
+	ctxType = reflect.TypeOf((*context.Context)(nil)).Elem()
 )
 
 func newTestBot(t *testing.T, opts ...Option) (func(...update), *MockTelegram, *MockTransmission) {
@@ -41,29 +52,49 @@ func newTestBot(t *testing.T, opts ...Option) (func(...update), *MockTelegram, *
 	}, tg, tr
 }
 
-type messageMatcher struct {
-	chatID int64
-	msg    string
+type customMatcher struct {
+	name    string
+	matches func(x interface{}) bool
 }
 
-func message(chatID int64, msg string) *messageMatcher {
-	return &messageMatcher{
-		chatID: chatID,
-		msg:    msg,
+func (m *customMatcher) Matches(x interface{}) bool {
+	return m.matches(x)
+}
+
+func (m *customMatcher) String() string {
+	return m.name
+}
+
+func messageMatcher(chatID int64, re string) *customMatcher {
+	return &customMatcher{
+		name: fmt.Sprintf("Message to %d matches re %q", chatID, re),
+		matches: func(x interface{}) bool {
+			msg, ok := x.(tgbotapi.MessageConfig)
+			if !ok {
+				return false
+			}
+			r := regexp.MustCompile(re)
+
+			return msg.BaseChat.ChatID == chatID && r.MatchString(msg.Text)
+		},
 	}
 }
 
-func (m *messageMatcher) Matches(x interface{}) bool {
-	msg, ok := x.(tgbotapi.MessageConfig)
-	if !ok {
-		return false
+func torrentMatcher(content []byte) *customMatcher {
+	return &customMatcher{
+		name: fmt.Sprintf("Torrent file is %q", string(content)),
+		matches: func(x interface{}) bool {
+			t, ok := x.(*transmission.AddTorrentReq)
+			if !ok {
+				return false
+			}
+			if t.Meta == nil {
+				return false
+			}
+			data, _ := ioutil.ReadAll(t.Meta)
+			return bytes.Equal(data, content)
+		},
 	}
-
-	return msg.BaseChat.ChatID == m.chatID && strings.Contains(msg.Text, m.msg)
-}
-
-func (m *messageMatcher) String() string {
-	return "Message is"
 }
 
 type updateGenerator struct {
@@ -105,6 +136,12 @@ func withUser(user string) func(u *tgbotapi.Update) {
 	}
 }
 
+func withText(text string) func(u *tgbotapi.Update) {
+	return func(u *tgbotapi.Update) {
+		u.Message.Text = text
+	}
+}
+
 func withCommand(cmd string) func(u *tgbotapi.Update) {
 	return func(u *tgbotapi.Update) {
 		u.Message.Text = "/" + cmd
@@ -118,26 +155,44 @@ func withCommand(cmd string) func(u *tgbotapi.Update) {
 	}
 }
 
+func withDocument(id string) func(u *tgbotapi.Update) {
+	return func(u *tgbotapi.Update) {
+		u.Message.Document = &tgbotapi.Document{
+			FileID: id,
+		}
+	}
+}
+
 func TestAuth(t *testing.T) {
 	run, tg, _ := newTestBot(t)
 	gen := new(updateGenerator)
 
 	update := gen.newMessage(withUser("testuser"))
-	tg.EXPECT().Send(message(update.chatID(), "I don't know you"))
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "I don't know you"))
 	run(update)
 }
 
-func TestStart(t *testing.T) {
+func TestCommand_unknown(t *testing.T) {
+	run, tg, _ := newTestBot(t)
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withCommand("invalid"))
+
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "Unknown command"))
+	run(update)
+}
+
+func TestCommand_start(t *testing.T) {
 	run, tg, _ := newTestBot(t)
 	gen := new(updateGenerator)
 
 	update := gen.newMessage(withCommand("start"))
 
-	tg.EXPECT().Send(message(update.chatID(), "Drop me"))
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "Drop me"))
 	run(update)
 }
 
-func TestCheckPort(t *testing.T) {
+func TestCommand_checkPort(t *testing.T) {
 	gen := new(updateGenerator)
 
 	update := gen.newMessage(withCommand("checkport"))
@@ -156,10 +211,61 @@ func TestCheckPort(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			run, tg, tr := newTestBot(t)
 
-			tg.EXPECT().Send(message(123, tc.expect))
-			tr.EXPECT().IsPortOpen(gomock.Any()).Return(tc.ret, nil)
-
+			isPortOpenCall := tr.EXPECT().IsPortOpen(gomock.AssignableToTypeOf(ctxType)).Return(tc.ret, nil)
+			tg.EXPECT().Send(messageMatcher(update.chatID(), tc.expect)).After(isPortOpenCall)
 			run(update)
 		})
 	}
+}
+
+func TestAddTorrent_text(t *testing.T) {
+	run, tg, tr := newTestBot(t)
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withText("magnet:/"))
+
+	addTorrentCall := tr.EXPECT().AddTorrent(gomock.AssignableToTypeOf(ctxType), &transmission.AddTorrentReq{
+		URL: transmission.OptString("magnet:/"),
+	}).Return(&transmission.NewTorrent{
+		ID:   transmission.ID(1),
+		Hash: transmission.Hash("abc"),
+		Name: "new-fancy-torrent",
+	}, nil)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "new-fancy-torrent")).After(addTorrentCall)
+
+	run(update)
+}
+
+func TestAddTorrent_file(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if want, got := "/files/file_id", r.URL.Path; want != got {
+			t.Errorf("unexpected file download path, want = %q, got = %q", want, got)
+		}
+		if want, got := "GET", r.Method; want != got {
+			t.Errorf("unexpected HTTP method, want = %q, got = %q", want, got)
+		}
+
+		if _, err := w.Write([]byte("torrent-file-contents")); err != nil {
+			t.Errorf("unexpected error sending the file: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	run, tg, tr := newTestBot(t, WithHTTPClient(srv.Client()))
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withDocument("file_id"))
+
+	getFileCall := tg.EXPECT().GetFileDirectURL("file_id").Return(srv.URL+"/files/file_id", nil)
+	addTorrentCall := tr.EXPECT().AddTorrent(
+		gomock.AssignableToTypeOf(ctxType),
+		torrentMatcher([]byte("torrent-file-contents")),
+	).Return(&transmission.NewTorrent{
+		ID:   transmission.ID(1),
+		Hash: transmission.Hash("abc"),
+		Name: "new-fancy-torrent",
+	}, nil).After(getFileCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "new-fancy-torrent")).After(getFileCall).After(addTorrentCall)
+
+	run(update)
 }

@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -8,6 +9,7 @@ import (
 
 func TestConfig(t *testing.T) {
 	testLogger := noopLogger{}
+	testHTTPClient := &http.Client{}
 
 	var tests = []struct {
 		name string
@@ -23,6 +25,11 @@ func TestConfig(t *testing.T) {
 			name: "allowed_user",
 			opts: []Option{WithAllowedUser("user1")},
 			want: &config{AllowedUser: "user1"},
+		},
+		{
+			name: "http_client",
+			opts: []Option{WithHTTPClient(testHTTPClient)},
+			want: &config{HTTPClient: testHTTPClient},
 		},
 	}
 

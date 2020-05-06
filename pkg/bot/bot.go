@@ -30,6 +30,7 @@ type Bot struct {
 
 	tg    Telegram
 	trans Transmission
+	http  *http.Client
 	admin string
 }
 
@@ -46,6 +47,7 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 
 		tg:    tg,
 		trans: transmission,
+		http:  conf.HTTPClient,
 		admin: conf.AllowedUser,
 	}
 
@@ -137,7 +139,7 @@ func (b *Bot) handleDocument(ctx context.Context, m *tgbotapi.Message) tgbotapi.
 	if err != nil {
 		return replyError(m, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := b.http.Do(req)
 	if err != nil {
 		return replyError(m, err)
 	}
