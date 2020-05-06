@@ -30,7 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: echo ::set-env name=docker_tag::$(echo ${GITHUB_REF:11})
+      - run: echo ::set-env name=docker_tags::$(echo latest)
+      - run: echo ::set-env name=docker_tags::$(echo latest,${GITHUB_REF:11})
         if: "startsWith(github.ref, 'refs/tags/')"
       - uses: docker/build-push-action@v1
         with:
@@ -39,6 +40,6 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           add_git_labels: true
           push: true
-          tags: latest,${{ env.docker_tag }}
+          tags: ${{ env.docker_tags }}
 
 # vim: set ts=2 sw=2 expandtab:
