@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - run: echo ::set-env name=docker_tag::$(echo ${GITHUB_REF:11})
       - uses: docker/build-push-action@v1
         with:
           repository: pbor/tg-bot-transmission
@@ -37,6 +38,6 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           add_git_labels: true
           push: true
-          tags: latest,${GITHUB_REF:11}
+          tags: latest,${{ env.docker_tag }}
 
 # vim: set ts=2 sw=2 expandtab:
