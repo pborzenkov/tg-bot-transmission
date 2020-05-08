@@ -81,6 +81,7 @@ func (c *config) exec(ctx context.Context, args []string) error {
 	bot.New(tg, trans,
 		bot.WithLogger(log),
 		bot.WithAllowedUser(c.AllowUser),
+		bot.WithSetCommands(),
 	).Run(ctx)
 
 	return nil

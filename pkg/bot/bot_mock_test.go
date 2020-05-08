@@ -9,6 +9,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	gomock "github.com/golang/mock/gomock"
 	transmission "github.com/pborzenkov/go-transmission/transmission"
+	url "net/url"
 	reflect "reflect"
 )
 
@@ -63,6 +64,21 @@ func (m *MockTelegram) GetUpdates(arg0 tgbotapi.UpdateConfig) ([]tgbotapi.Update
 func (mr *MockTelegramMockRecorder) GetUpdates(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpdates", reflect.TypeOf((*MockTelegram)(nil).GetUpdates), arg0)
+}
+
+// MakeRequest mocks base method
+func (m *MockTelegram) MakeRequest(arg0 string, arg1 url.Values) (tgbotapi.APIResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MakeRequest", arg0, arg1)
+	ret0, _ := ret[0].(tgbotapi.APIResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MakeRequest indicates an expected call of MakeRequest
+func (mr *MockTelegramMockRecorder) MakeRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeRequest", reflect.TypeOf((*MockTelegram)(nil).MakeRequest), arg0, arg1)
 }
 
 // Send mocks base method

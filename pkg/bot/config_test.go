@@ -31,6 +31,11 @@ func TestConfig(t *testing.T) {
 			opts: []Option{WithHTTPClient(testHTTPClient)},
 			want: &config{HTTPClient: testHTTPClient},
 		},
+		{
+			name: "set_commands",
+			opts: []Option{WithSetCommands()},
+			want: &config{SetCommands: true},
+		},
 	}
 
 	for _, tc := range tests {

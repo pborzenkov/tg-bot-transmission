@@ -8,6 +8,7 @@ type config struct {
 	Log         Logger
 	AllowedUser string
 	HTTPClient  *http.Client
+	SetCommands bool
 }
 
 func defaultConfig() *config {
@@ -51,5 +52,14 @@ func WithHTTPClient(client *http.Client) Option {
 		if client != nil {
 			c.HTTPClient = client
 		}
+	})
+}
+
+// WithSetCommands tells the bot to upload up-to-date list of the supported
+// commands to the Telegram servers. It's not considered to be a fatal error if
+// the upload fails. Alternitevly, this can be done manually via @BotFather.
+func WithSetCommands() Option {
+	return optionFunc(func(c *config) {
+		c.SetCommands = true
 	})
 }

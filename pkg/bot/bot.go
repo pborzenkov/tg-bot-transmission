@@ -2,7 +2,9 @@ package bot
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -12,6 +14,7 @@ import (
 // Telegram defines an interface that telegram client must implement in order
 // to be usable by this bot.
 type Telegram interface {
+	MakeRequest(string, url.Values) (tgbotapi.APIResponse, error)
 	GetUpdates(tgbotapi.UpdateConfig) ([]tgbotapi.Update, error)
 	Send(tgbotapi.Chattable) (tgbotapi.Message, error)
 	GetFileDirectURL(string) (string, error)
@@ -34,6 +37,15 @@ type Bot struct {
 	trans Transmission
 	http  *http.Client
 	admin string
+
+	commands          map[string]*botCommand
+	shouldSetCommands bool
+}
+
+type botCommand struct {
+	description string
+	handler     func(context.Context, *tgbotapi.Message, string) tgbotapi.Chattable
+	dontSet     bool
 }
 
 // New returns new instance of the Bot with the given token that talks to
@@ -47,10 +59,32 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 	b := &Bot{
 		log: conf.Log,
 
-		tg:    tg,
-		trans: transmission,
-		http:  conf.HTTPClient,
-		admin: conf.AllowedUser,
+		tg:                tg,
+		trans:             transmission,
+		http:              conf.HTTPClient,
+		admin:             conf.AllowedUser,
+		shouldSetCommands: conf.SetCommands,
+	}
+
+	b.commands = map[string]*botCommand{
+		"start": {
+			dontSet: true,
+			handler: func(_ context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
+				return replyText(m, "Drop me a magnet link/torrent URL or a torrent file.")
+			},
+		},
+		"checkport": {
+			description: "Check if the incoming port is open",
+			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
+				return b.checkPort(ctx, m)
+			},
+		},
+		"stats": {
+			description: "Show session statistics",
+			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
+				return b.stats(ctx, m)
+			},
+		},
 	}
 
 	return b
@@ -58,6 +92,10 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 
 // Run runs the bot until ctx is cancelled.
 func (b *Bot) Run(ctx context.Context) {
+	if b.shouldSetCommands {
+		b.setCommands(ctx)
+	}
+
 	offset := 0
 
 	for {
@@ -94,6 +132,37 @@ func (b *Bot) Run(ctx context.Context) {
 	}
 }
 
+func (b *Bot) setCommands(_ context.Context) {
+	type tgBotCommand struct {
+		Command     string `json:"command"`
+		Description string `json:"description"`
+	}
+	var commands []tgBotCommand
+
+	for name, c := range b.commands {
+		if c.dontSet {
+			continue
+		}
+		commands = append(commands, tgBotCommand{
+			Command:     name,
+			Description: c.description,
+		})
+	}
+	data, err := json.Marshal(commands)
+	if err != nil {
+		b.log.Infof("failed to marshal a list of the bot commands: %v", err)
+		return
+	}
+
+	b.log.Debugf("uploading a list of %d commands", len(commands))
+
+	v := url.Values{}
+	v.Add("commands", string(data))
+	if _, err := b.tg.MakeRequest("setMyCommands", v); err != nil {
+		b.log.Infof("failed to upload a list of the bot commands: %v", err)
+	}
+}
+
 func (b *Bot) processUpdate(ctx context.Context, u tgbotapi.Update) tgbotapi.Chattable {
 	if u.Message == nil || u.Message.From == nil {
 		return nil
@@ -116,16 +185,12 @@ func (b *Bot) processUpdate(ctx context.Context, u tgbotapi.Update) tgbotapi.Cha
 }
 
 func (b *Bot) handleCommand(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable {
-	switch m.Command() {
-	case "start":
-		return replyText(m, "Drop me a magnet link/torrent URL or a torrent file.")
-	case "checkport":
-		return b.checkPort(ctx, m)
-	case "stats":
-		return b.stats(ctx, m)
-	default:
+	cmd, ok := b.commands[m.Command()]
+	if !ok {
 		return replyText(m, "Unknown command")
 	}
+
+	return cmd.handler(ctx, m, m.CommandArguments())
 }
 
 func (b *Bot) handleText(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable {
