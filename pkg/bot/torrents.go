@@ -81,3 +81,17 @@ func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable
 
 	return replyText(m, buf.String(), withParseMode("MarkdownV2"))
 }
+
+func (b *Bot) setTurtle(ctx context.Context, m *tgbotapi.Message, on bool) tgbotapi.Chattable {
+	if err := b.trans.SetSession(ctx, &transmission.SetSessionReq{
+		TurtleEnabled: transmission.OptBool(on),
+	}); err != nil {
+		return replyError(m, err)
+	}
+
+	state := "enabled 🐢"
+	if !on {
+		state = "disabled ~🐢~"
+	}
+	return replyText(m, "Turtle mode is now "+state, withParseMode("MarkdownV2"))
+}

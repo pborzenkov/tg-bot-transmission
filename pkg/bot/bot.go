@@ -27,6 +27,7 @@ type Transmission interface {
 	IsPortOpen(context.Context) (bool, error)
 	GetSessionStats(context.Context) (*transmission.SessionStats, error)
 	GetSession(context.Context) (*transmission.Session, error)
+	SetSession(context.Context, *transmission.SetSessionReq) error
 }
 
 // Bot implement transmission telegram bot.
@@ -83,6 +84,18 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 			description: "Show session statistics",
 			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
 				return b.stats(ctx, m)
+			},
+		},
+		"turtleon": {
+			description: "Enable turtle mode",
+			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
+				return b.setTurtle(ctx, m, true)
+			},
+		},
+		"turtleoff": {
+			description: "Disable turtle mode",
+			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
+				return b.setTurtle(ctx, m, false)
 			},
 		},
 	}

@@ -163,6 +163,13 @@ func withDocument(id string) func(u *tgbotapi.Update) {
 	}
 }
 
+func TestSetCommands(t *testing.T) {
+	run, tg, _ := newTestBot(t, WithSetCommands())
+
+	tg.EXPECT().MakeRequest("setMyCommands", gomock.Any())
+	run()
+}
+
 func TestAuth(t *testing.T) {
 	run, tg, _ := newTestBot(t)
 	gen := new(updateGenerator)
@@ -296,4 +303,32 @@ func TestStats(t *testing.T) {
 		))
 
 	run(update)
+}
+
+func TestTurtle(t *testing.T) {
+	var tests = []struct {
+		name    string
+		command string
+		set     bool
+		expect  string
+	}{
+		{name: "on", command: "turtleon", set: true, expect: "enabled"},
+		{name: "off", command: "turtleoff", set: false, expect: "disabled"},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			run, tg, tr := newTestBot(t)
+			gen := new(updateGenerator)
+
+			update := gen.newMessage(withCommand(tc.command))
+
+			turtleCall := tr.EXPECT().SetSession(gomock.AssignableToTypeOf(ctxType), &transmission.SetSessionReq{
+				TurtleEnabled: transmission.OptBool(tc.set),
+			}).Return(nil)
+			tg.EXPECT().Send(messageMatcher(update.chatID(), tc.expect)).After(turtleCall)
+			run(update)
+		})
+	}
 }
