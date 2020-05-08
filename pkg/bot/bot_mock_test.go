@@ -192,3 +192,31 @@ func (mr *MockTransmissionMockRecorder) SetSession(arg0, arg1 interface{}) *gomo
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSession", reflect.TypeOf((*MockTransmission)(nil).SetSession), arg0, arg1)
 }
+
+// StartTorrents mocks base method
+func (m *MockTransmission) StartTorrents(arg0 context.Context, arg1 transmission.Identifier) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartTorrents", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StartTorrents indicates an expected call of StartTorrents
+func (mr *MockTransmissionMockRecorder) StartTorrents(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartTorrents", reflect.TypeOf((*MockTransmission)(nil).StartTorrents), arg0, arg1)
+}
+
+// StopTorrents mocks base method
+func (m *MockTransmission) StopTorrents(arg0 context.Context, arg1 transmission.Identifier) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopTorrents", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StopTorrents indicates an expected call of StopTorrents
+func (mr *MockTransmissionMockRecorder) StopTorrents(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopTorrents", reflect.TypeOf((*MockTransmission)(nil).StopTorrents), arg0, arg1)
+}

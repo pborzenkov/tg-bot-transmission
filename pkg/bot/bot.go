@@ -28,6 +28,8 @@ type Transmission interface {
 	GetSessionStats(context.Context) (*transmission.SessionStats, error)
 	GetSession(context.Context) (*transmission.Session, error)
 	SetSession(context.Context, *transmission.SetSessionReq) error
+	StartTorrents(context.Context, transmission.Identifier) error
+	StopTorrents(context.Context, transmission.Identifier) error
 }
 
 // Bot implement transmission telegram bot.
@@ -96,6 +98,18 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 			description: "Disable turtle mode",
 			handler: func(ctx context.Context, m *tgbotapi.Message, _ string) tgbotapi.Chattable {
 				return b.setTurtle(ctx, m, false)
+			},
+		},
+		"resume": {
+			description: "Resume specified torrents",
+			handler: func(ctx context.Context, m *tgbotapi.Message, args string) tgbotapi.Chattable {
+				return b.startStopTorrents(ctx, m, args, b.trans.StartTorrents)
+			},
+		},
+		"pause": {
+			description: "Pause specified torrents",
+			handler: func(ctx context.Context, m *tgbotapi.Message, args string) tgbotapi.Chattable {
+				return b.startStopTorrents(ctx, m, args, b.trans.StopTorrents)
 			},
 		},
 	}

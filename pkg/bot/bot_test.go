@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -67,7 +68,7 @@ func (m *customMatcher) String() string {
 
 func messageMatcher(chatID int64, re string) *customMatcher {
 	return &customMatcher{
-		name: fmt.Sprintf("Message to %d matches re %q", chatID, re),
+		name: fmt.Sprintf("Message to %d matches re '%s'", chatID, re),
 		matches: func(x interface{}) bool {
 			msg, ok := x.(tgbotapi.MessageConfig)
 			if !ok {
@@ -82,7 +83,7 @@ func messageMatcher(chatID int64, re string) *customMatcher {
 
 func torrentMatcher(content []byte) *customMatcher {
 	return &customMatcher{
-		name: fmt.Sprintf("Torrent file is %q", string(content)),
+		name: fmt.Sprintf("Torrent file is '%s'", string(content)),
 		matches: func(x interface{}) bool {
 			t, ok := x.(*transmission.AddTorrentReq)
 			if !ok {
@@ -142,9 +143,9 @@ func withText(text string) func(u *tgbotapi.Update) {
 	}
 }
 
-func withCommand(cmd string) func(u *tgbotapi.Update) {
+func withCommand(cmd string, args ...string) func(u *tgbotapi.Update) {
 	return func(u *tgbotapi.Update) {
-		u.Message.Text = "/" + cmd
+		u.Message.Text = "/" + cmd + " " + strings.Join(args, " ")
 		u.Message.Entities = &[]tgbotapi.MessageEntity{
 			{
 				Type:   "bot_command",
@@ -238,7 +239,7 @@ func TestAddTorrent_text(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), "1.*new fancy torrent")).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\\<\*1\*\\\> new fancy torrent`)).After(addTorrentCall)
 
 	run(update)
 }
@@ -272,7 +273,8 @@ func TestAddTorrent_file(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil).After(getFileCall)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), "1.*new fancy torrent")).After(getFileCall).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\\<\*1\*\\\> new fancy torrent`)).
+		After(getFileCall).After(addTorrentCall)
 
 	run(update)
 }
@@ -286,7 +288,7 @@ func TestStats(t *testing.T) {
 	tr.EXPECT().GetSessionStats(gomock.AssignableToTypeOf(ctxType)).Return(&transmission.SessionStats{
 		DownloadRate:   2097152,
 		UploadRate:     1048576,
-		Torrents:       10,
+		PausedTorrents: 10,
 		ActiveTorrents: 3,
 		AllSessions: transmission.Stats{
 			Downloaded: 1073741824,
@@ -297,9 +299,8 @@ func TestStats(t *testing.T) {
 		TurtleEnabled: false,
 	}, nil)
 	tg.EXPECT().Send(
-		messageMatcher(update.chatID(), `(?s)Rate.*↓.*2\\.0 MiB/s.*↑.*1\\.0 MiB/s.*~🐢~.*`+
-			`Torrents.*10.*Active.*3.*`+
-			`Total.*↓.*1\\.0 GiB.*↑.*2\\.3 GiB.*☯ 2\\.25`,
+		messageMatcher(update.chatID(), `^↓\*2\\\.0 MiB/s\* ↑\*1\\\.0 MiB/s\* 🚀   `+
+			`↻\*3\* ⊗\*10\*   ↓\*1\\\.0 GiB\* ↑\*2\\\.3 GiB\* ☯\*2\\\.25\*$`,
 		))
 
 	run(update)
@@ -328,6 +329,54 @@ func TestTurtle(t *testing.T) {
 				TurtleEnabled: transmission.OptBool(tc.set),
 			}).Return(nil)
 			tg.EXPECT().Send(messageMatcher(update.chatID(), tc.expect)).After(turtleCall)
+			run(update)
+		})
+	}
+}
+
+func TestStartStopTorrents(t *testing.T) {
+	var tests = []struct {
+		name      string
+		command   string
+		args      string
+		isStart   bool
+		expectIDs transmission.Identifier
+	}{
+		{
+			name:    "resume_all",
+			command: "resume",
+			isStart: true,
+		},
+		{
+			name:      "resume_two",
+			command:   "resume",
+			args:      "2   7",
+			isStart:   true,
+			expectIDs: transmission.IDs(transmission.ID(2), transmission.ID(7)),
+		},
+		{
+			name:      "pause_one",
+			command:   "pause",
+			args:      "3",
+			expectIDs: transmission.IDs(transmission.ID(3)),
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			run, tg, tr := newTestBot(t)
+			gen := new(updateGenerator)
+
+			update := gen.newMessage(withCommand(tc.command, tc.args))
+
+			call := tr.EXPECT().StopTorrents
+			if tc.isStart {
+				call = tr.EXPECT().StartTorrents
+			}
+
+			startStopCall := call(gomock.AssignableToTypeOf(ctxType), tc.expectIDs).Return(nil)
+			tg.EXPECT().Send(messageMatcher(update.chatID(), "Done")).After(startStopCall)
 			run(update)
 		})
 	}

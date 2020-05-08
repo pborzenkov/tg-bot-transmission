@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -13,9 +14,9 @@ import (
 
 var (
 	statsTemplate = template.Must(template.New("stats").Parse(
-		`*Rate*: *↓* {{ .DownloadRate }}/s *↑* {{ .UploadRate }}/s \({{ if .TurtleMode }}🐢{{ else }}~🐢~{{ end }}\)
-*Torrents*: {{ .TotalTorrents }}, *Active*: {{ .ActiveTorrents }}
-*Total*: *↓* {{ .DownloadedTotal }} *↑* {{ .UploadedTotal }} \(☯ {{ .Ratio }}\)`,
+		`↓*{{ .DownloadRate }}/s* ↑*{{ .UploadRate }}/s* {{ if .TurtleMode }}🐢{{ else }}🚀{{ end }}   ` +
+			`↻*{{ .ActiveTorrents }}* ⊗*{{ .PausedTorrents }}*   ` +
+			`↓*{{ .DownloadedTotal }}* ↑*{{ .UploadedTotal }}* ☯*{{ .Ratio }}*`,
 	))
 )
 
@@ -26,7 +27,7 @@ func (b *Bot) addTorrent(ctx context.Context, m *tgbotapi.Message, req *transmis
 	}
 
 	return replyText(m,
-		fmt.Sprintf("Added new torrent\n\n*%d* \\- _%s_", torrent.ID, escapeMarkdownV2(torrent.Name)),
+		fmt.Sprintf("👌 \\<*%d*\\> %s", torrent.ID, escapeMarkdownV2(torrent.Name)),
 		withParseMode("MarkdownV2"),
 	)
 }
@@ -60,8 +61,8 @@ func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable
 		DownloadRate    string
 		UploadRate      string
 		TurtleMode      bool
-		TotalTorrents   int
 		ActiveTorrents  int
+		PausedTorrents  int
 		DownloadedTotal string
 		UploadedTotal   string
 		Ratio           string
@@ -69,8 +70,8 @@ func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable
 		DownloadRate:    escapeMarkdownV2(humanize.IBytes(uint64(stats.DownloadRate))),
 		UploadRate:      escapeMarkdownV2(humanize.IBytes(uint64(stats.UploadRate))),
 		TurtleMode:      session.TurtleEnabled,
-		TotalTorrents:   stats.Torrents,
 		ActiveTorrents:  stats.ActiveTorrents,
+		PausedTorrents:  stats.PausedTorrents,
 		DownloadedTotal: escapeMarkdownV2(humanize.IBytes(uint64(stats.AllSessions.Downloaded))),
 		UploadedTotal:   escapeMarkdownV2(humanize.IBytes(uint64(stats.AllSessions.Uploaded))),
 		Ratio: escapeMarkdownV2(fmt.Sprintf("%.2f",
@@ -89,9 +90,38 @@ func (b *Bot) setTurtle(ctx context.Context, m *tgbotapi.Message, on bool) tgbot
 		return replyError(m, err)
 	}
 
-	state := "enabled 🐢"
+	state := "*enabled* 🐢"
 	if !on {
-		state = "disabled ~🐢~"
+		state = "*disabled* 🚀"
 	}
 	return replyText(m, "Turtle mode is now "+state, withParseMode("MarkdownV2"))
+}
+
+func (b *Bot) startStopTorrents(ctx context.Context, m *tgbotapi.Message, args string,
+	op func(context.Context, transmission.Identifier) error) tgbotapi.Chattable {
+	var target transmission.Identifier
+
+	if args != "" {
+		ids := strings.Split(args, " ")
+		targets := make([]transmission.SingularIdentifier, 0)
+		for _, i := range ids {
+			i = strings.TrimSpace(i)
+			if i == "" {
+				continue
+			}
+			id, err := strconv.Atoi(i)
+			if err != nil {
+				return replyError(m, err)
+			}
+			targets = append(targets, transmission.ID(id))
+		}
+		if len(targets) > 0 {
+			target = transmission.IDs(targets...)
+		}
+	}
+	if err := op(ctx, target); err != nil {
+		return replyError(m, err)
+	}
+
+	return replyText(m, "Done 😎")
 }
