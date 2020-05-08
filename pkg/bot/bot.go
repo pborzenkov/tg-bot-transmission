@@ -106,8 +106,8 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 				return b.startStopTorrents(ctx, m, args, b.trans.StartTorrents)
 			},
 		},
-		"pause": {
-			description: "Pause specified torrents",
+		"stop": {
+			description: "Stop specified torrents",
 			handler: func(ctx context.Context, m *tgbotapi.Message, args string) tgbotapi.Chattable {
 				return b.startStopTorrents(ctx, m, args, b.trans.StopTorrents)
 			},

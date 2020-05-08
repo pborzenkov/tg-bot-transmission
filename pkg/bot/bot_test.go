@@ -356,7 +356,7 @@ func TestStartStopTorrents(t *testing.T) {
 		},
 		{
 			name:      "pause_one",
-			command:   "pause",
+			command:   "stop",
 			args:      "3",
 			expectIDs: transmission.IDs(transmission.ID(3)),
 		},
