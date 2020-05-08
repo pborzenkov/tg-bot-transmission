@@ -229,9 +229,9 @@ func TestAddTorrent_text(t *testing.T) {
 	}).Return(&transmission.NewTorrent{
 		ID:   transmission.ID(1),
 		Hash: transmission.Hash("abc"),
-		Name: "new-fancy-torrent",
+		Name: "new fancy torrent",
 	}, nil)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), "new-fancy-torrent")).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "1.*new fancy torrent")).After(addTorrentCall)
 
 	run(update)
 }
@@ -263,9 +263,37 @@ func TestAddTorrent_file(t *testing.T) {
 	).Return(&transmission.NewTorrent{
 		ID:   transmission.ID(1),
 		Hash: transmission.Hash("abc"),
-		Name: "new-fancy-torrent",
+		Name: "new fancy torrent",
 	}, nil).After(getFileCall)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), "new-fancy-torrent")).After(getFileCall).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), "1.*new fancy torrent")).After(getFileCall).After(addTorrentCall)
+
+	run(update)
+}
+
+func TestStats(t *testing.T) {
+	run, tg, tr := newTestBot(t)
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withCommand("stats"))
+
+	tr.EXPECT().GetSessionStats(gomock.AssignableToTypeOf(ctxType)).Return(&transmission.SessionStats{
+		DownloadRate:   2097152,
+		UploadRate:     1048576,
+		Torrents:       10,
+		ActiveTorrents: 3,
+		AllSessions: transmission.Stats{
+			Downloaded: 1073741824,
+			Uploaded:   2415919104,
+		},
+	}, nil)
+	tr.EXPECT().GetSession(gomock.AssignableToTypeOf(ctxType)).Return(&transmission.Session{
+		TurtleEnabled: false,
+	}, nil)
+	tg.EXPECT().Send(
+		messageMatcher(update.chatID(), `(?s)Rate.*↓.*2\\.0 MiB/s.*↑.*1\\.0 MiB/s.*~🐢~.*`+
+			`Torrents.*10.*Active.*3.*`+
+			`Total.*↓.*1\\.0 GiB.*↑.*2\\.3 GiB.*☯ 2\\.25`,
+		))
 
 	run(update)
 }

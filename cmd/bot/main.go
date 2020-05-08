@@ -57,6 +57,7 @@ func main() {
 	go func() {
 		<-sig
 		cancel()
+		signal.Stop(sig)
 	}()
 
 	if err := cfg.command().ParseAndRun(ctx, os.Args[1:]); err != nil {

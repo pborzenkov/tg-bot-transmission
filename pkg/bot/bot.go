@@ -22,6 +22,8 @@ type Telegram interface {
 type Transmission interface {
 	AddTorrent(context.Context, *transmission.AddTorrentReq) (*transmission.NewTorrent, error)
 	IsPortOpen(context.Context) (bool, error)
+	GetSessionStats(context.Context) (*transmission.SessionStats, error)
+	GetSession(context.Context) (*transmission.Session, error)
 }
 
 // Bot implement transmission telegram bot.
@@ -119,6 +121,8 @@ func (b *Bot) handleCommand(ctx context.Context, m *tgbotapi.Message) tgbotapi.C
 		return replyText(m, "Drop me a magnet link/torrent URL or a torrent file.")
 	case "checkport":
 		return b.checkPort(ctx, m)
+	case "stats":
+		return b.stats(ctx, m)
 	default:
 		return replyText(m, "Unknown command")
 	}
