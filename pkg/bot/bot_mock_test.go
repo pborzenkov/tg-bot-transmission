@@ -164,6 +164,26 @@ func (mr *MockTransmissionMockRecorder) GetSessionStats(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionStats", reflect.TypeOf((*MockTransmission)(nil).GetSessionStats), arg0)
 }
 
+// GetTorrents mocks base method
+func (m *MockTransmission) GetTorrents(arg0 context.Context, arg1 transmission.Identifier, arg2 ...transmission.TorrentField) ([]*transmission.Torrent, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetTorrents", varargs...)
+	ret0, _ := ret[0].([]*transmission.Torrent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTorrents indicates an expected call of GetTorrents
+func (mr *MockTransmissionMockRecorder) GetTorrents(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTorrents", reflect.TypeOf((*MockTransmission)(nil).GetTorrents), varargs...)
+}
+
 // IsPortOpen mocks base method
 func (m *MockTransmission) IsPortOpen(arg0 context.Context) (bool, error) {
 	m.ctrl.T.Helper()

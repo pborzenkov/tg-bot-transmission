@@ -32,9 +32,9 @@ func replyText(m *tgbotapi.Message, txt string, opts ...textOption) tgbotapi.Cha
 
 type textOption func(*tgbotapi.MessageConfig)
 
-func withParseMode(mode string) textOption {
+func withMarkdownV2() textOption {
 	return func(msg *tgbotapi.MessageConfig) {
-		msg.ParseMode = mode
+		msg.ParseMode = "MarkdownV2"
 	}
 }
 

@@ -30,6 +30,7 @@ type Transmission interface {
 	SetSession(context.Context, *transmission.SetSessionReq) error
 	StartTorrents(context.Context, transmission.Identifier) error
 	StopTorrents(context.Context, transmission.Identifier) error
+	GetTorrents(context.Context, transmission.Identifier, ...transmission.TorrentField) ([]*transmission.Torrent, error)
 }
 
 // Bot implement transmission telegram bot.
@@ -111,6 +112,10 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 			handler: func(ctx context.Context, m *tgbotapi.Message, args string) tgbotapi.Chattable {
 				return b.startStopTorrents(ctx, m, args, b.trans.StopTorrents)
 			},
+		},
+		"list": {
+			description: "List torrents",
+			handler:     b.listTorrents,
 		},
 	}
 

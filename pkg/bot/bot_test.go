@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/golang/mock/gomock"
@@ -239,7 +240,7 @@ func TestAddTorrent_text(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\\<\*1\*\\\> new fancy torrent`)).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\<\*1\*\\> new fancy torrent`)).After(addTorrentCall)
 
 	run(update)
 }
@@ -273,7 +274,7 @@ func TestAddTorrent_file(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil).After(getFileCall)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\\<\*1\*\\\> new fancy torrent`)).
+	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\<\*1\*\\> new fancy torrent`)).
 		After(getFileCall).After(addTorrentCall)
 
 	run(update)
@@ -380,4 +381,70 @@ func TestStartStopTorrents(t *testing.T) {
 			run(update)
 		})
 	}
+}
+
+func TestList(t *testing.T) {
+	run, tg, tr := newTestBot(t)
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withCommand("list"))
+
+	tr.EXPECT().GetTorrents(gomock.AssignableToTypeOf(ctxType), nil, gomock.Any()).Return([]*transmission.Torrent{
+		{
+			ID:           1,
+			Name:         "test torrent",
+			Status:       transmission.StatusDownload,
+			ValidSize:    1024,
+			WantedSize:   2048,
+			DownloadRate: 10,
+			UploadRate:   20,
+			UploadRatio:  1.2,
+			ETA:          20 * time.Minute,
+		},
+	}, nil)
+
+	tg.EXPECT().Send(
+		messageMatcher(update.chatID(), `^(?s)Here is what I got:\s+`+
+			`\\<\*1\*\\> \*test torrent\*`+
+			`.*Downloading \*1\\\.0 KiB\* of \*2\\\.0 KiB\* \\\(\*50\\\.0%\*\\\)`+
+			`.*↓\*10 B/s\* ↑\*20 B/s\* ☯\*1\\\.20\*   ETA: \*20m0s\*`),
+	)
+
+	run(update)
+}
+
+func TestList_filter(t *testing.T) {
+	run, tg, tr := newTestBot(t)
+	gen := new(updateGenerator)
+
+	update := gen.newMessage(withCommand("list", "second"))
+
+	tr.EXPECT().GetTorrents(gomock.AssignableToTypeOf(ctxType), nil, gomock.Any()).Return([]*transmission.Torrent{
+		{
+			ID:           1,
+			Name:         "first torrent",
+			Status:       transmission.StatusDownload,
+			ValidSize:    1024,
+			WantedSize:   2048,
+			DownloadRate: 10,
+			UploadRate:   20,
+			UploadRatio:  1.2,
+			ETA:          20 * time.Minute,
+		},
+		{
+			ID:           2,
+			Name:         "Second torrent",
+			Status:       transmission.StatusDownload,
+			ValidSize:    1024,
+			WantedSize:   2048,
+			DownloadRate: 10,
+			UploadRate:   20,
+			UploadRatio:  1.2,
+			ETA:          20 * time.Minute,
+		},
+	}, nil)
+
+	tg.EXPECT().Send(messageMatcher(update.chatID(), `^(?s)Here is what I got:\s+\\<\*2\*\\> \*Second torrent\*`))
+
+	run(update)
 }
