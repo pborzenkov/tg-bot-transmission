@@ -22,22 +22,84 @@ func escapeMarkdownV2(s string) string {
 	return markdownV2Replacer.Replace(s)
 }
 
-func replyText(m *tgbotapi.Message, txt string, opts ...textOption) tgbotapi.Chattable {
-	msg := tgbotapi.NewMessage(m.Chat.ID, txt)
+type optionable interface {
+	setText(string)
+	setParseMode(string)
+	setInlineKeyboard(tgbotapi.InlineKeyboardMarkup)
+}
+
+type replyOption func(optionable)
+
+type message struct {
+	tgbotapi.MessageConfig
+}
+
+func (m *message) setText(text string) {
+	m.MessageConfig.Text = text
+}
+
+func (m *message) setParseMode(mode string) {
+	m.MessageConfig.ParseMode = mode
+}
+
+func (m *message) setInlineKeyboard(kb tgbotapi.InlineKeyboardMarkup) {
+	m.MessageConfig.ReplyMarkup = kb
+}
+
+type editMessage struct {
+	tgbotapi.EditMessageTextConfig
+}
+
+func (m *editMessage) setText(text string) {
+	m.EditMessageTextConfig.Text = text
+}
+
+func (m *editMessage) setParseMode(mode string) {
+	m.EditMessageTextConfig.ParseMode = mode
+}
+
+func (m *editMessage) setInlineKeyboard(kb tgbotapi.InlineKeyboardMarkup) {
+	m.ReplyMarkup = &kb
+}
+
+func reply(m *tgbotapi.Message, opts ...replyOption) tgbotapi.Chattable {
+	msg := message{
+		MessageConfig: tgbotapi.NewMessage(m.Chat.ID, ""),
+	}
 	for _, opt := range opts {
 		opt(&msg)
 	}
-	return msg
+	return msg.MessageConfig
 }
 
-type textOption func(*tgbotapi.MessageConfig)
+func edit(m *tgbotapi.Message, opts ...replyOption) tgbotapi.Chattable {
+	edt := editMessage{
+		EditMessageTextConfig: tgbotapi.NewEditMessageText(m.Chat.ID, m.MessageID, ""),
+	}
+	for _, opt := range opts {
+		opt(&edt)
+	}
+	return edt.EditMessageTextConfig
+}
 
-func withMarkdownV2() textOption {
-	return func(msg *tgbotapi.MessageConfig) {
-		msg.ParseMode = "MarkdownV2"
+func withText(text string) replyOption {
+	return func(msg optionable) {
+		msg.setText(text)
 	}
 }
 
-func replyError(m *tgbotapi.Message, err error) tgbotapi.Chattable {
-	return replyText(m, "Oops, something went wrong: "+err.Error())
+func withError(err error) replyOption {
+	return withText("Oops, something went wrong: " + err.Error())
+}
+
+func withMarkdownV2() replyOption {
+	return func(msg optionable) {
+		msg.setParseMode("MarkdownV2")
+	}
+}
+
+func withInlineKeyboard(rows ...[]tgbotapi.InlineKeyboardButton) replyOption {
+	return func(msg optionable) {
+		msg.setInlineKeyboard(tgbotapi.NewInlineKeyboardMarkup(rows...))
+	}
 }

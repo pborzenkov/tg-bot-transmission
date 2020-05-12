@@ -2,19 +2,25 @@ package bot
 
 import (
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 type config struct {
-	Log         Logger
-	AllowedUser string
-	HTTPClient  *http.Client
-	SetCommands bool
+	Log           Logger
+	AllowedUser   string
+	HTTPClient    *http.Client
+	SetCommands   bool
+	NewCallbackID func() string
 }
 
 func defaultConfig() *config {
 	return &config{
 		Log:        noopLogger{},
 		HTTPClient: http.DefaultClient,
+		NewCallbackID: func() string {
+			return uuid.New().String()
+		},
 	}
 }
 
@@ -22,7 +28,6 @@ func defaultConfig() *config {
 type Option interface {
 	apply(*config)
 }
-
 type optionFunc func(*config)
 
 func (o optionFunc) apply(c *config) {
@@ -61,5 +66,15 @@ func WithHTTPClient(client *http.Client) Option {
 func WithSetCommands() Option {
 	return optionFunc(func(c *config) {
 		c.SetCommands = true
+	})
+}
+
+// withCallbackIDGenerator overwrites default callback ID generator. Private as
+// it's intended for tests only.
+func withCallbackIDGenerator(gen func() string) Option {
+	return optionFunc(func(c *config) {
+		if gen != nil {
+			c.NewCallbackID = gen
+		}
 	})
 }

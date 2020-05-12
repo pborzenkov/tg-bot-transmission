@@ -31,42 +31,52 @@ var (
 			`{{ if .ETA }}   ETA: *{{ .ETA }}*{{ end }}
 {{ end }}{{ else }}Don't have any matching torrent{{ end }}`,
 	))
+
+	removeTemplate = template.Must(template.New("remove").Parse(
+		`I'm going to remove the following torrents:
+
+{{ range . -}}
+\<*{{ .ID }}*\> *{{ .Name }}*
+{{ end }}
+Should I remove their data files as well?`,
+	))
 )
 
-func (b *Bot) addTorrent(ctx context.Context, m *tgbotapi.Message, req *transmission.AddTorrentReq) tgbotapi.Chattable {
+func (b *Bot) addTorrent(ctx context.Context, m *tgbotapi.Message,
+	req *transmission.AddTorrentReq) (tgbotapi.Chattable, error) {
 	torrent, err := b.trans.AddTorrent(ctx, req)
 	if err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
-	return replyText(m,
-		fmt.Sprintf("👌 \\<*%d*\\> %s", torrent.ID, escapeMarkdownV2(torrent.Name)),
+	return reply(m,
+		withText(fmt.Sprintf("👌 \\<*%d*\\> %s", torrent.ID, escapeMarkdownV2(torrent.Name))),
 		withMarkdownV2(),
-	)
+	), nil
 }
 
-func (b *Bot) checkPort(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable {
+func (b *Bot) checkPort(ctx context.Context, m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	open, err := b.trans.IsPortOpen(ctx)
 	if err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
-	reply := "Hooray! The port is open :)"
+	r := "Hooray! The port is open :)"
 	if !open {
-		reply = "Hmm... The port is closed :("
+		r = "Hmm... The port is closed :("
 	}
 
-	return replyText(m, reply)
+	return reply(m, withText(r)), nil
 }
 
-func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable {
+func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	stats, err := b.trans.GetSessionStats(ctx)
 	if err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 	session, err := b.trans.GetSession(ctx)
 	if err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
 	buf := new(strings.Builder)
@@ -90,56 +100,77 @@ func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) tgbotapi.Chattable
 		Ratio: escapeMarkdownV2(fmt.Sprintf("%.2f",
 			float64(stats.AllSessions.Uploaded)/float64(stats.AllSessions.Downloaded))),
 	}); err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
-	return replyText(m, buf.String(), withMarkdownV2())
+	return reply(m, withText(buf.String()), withMarkdownV2()), nil
 }
 
-func (b *Bot) setTurtle(ctx context.Context, m *tgbotapi.Message, on bool) tgbotapi.Chattable {
+func (b *Bot) setTurtle(ctx context.Context, m *tgbotapi.Message, on bool) (tgbotapi.Chattable, error) {
 	if err := b.trans.SetSession(ctx, &transmission.SetSessionReq{
 		TurtleEnabled: transmission.OptBool(on),
 	}); err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
 	state := "*enabled* 🐢"
 	if !on {
 		state = "*disabled* 🚀"
 	}
-	return replyText(m, "Turtle mode is now "+state, withMarkdownV2())
+	return reply(m, withText("Turtle mode is now "+state), withMarkdownV2()), nil
 }
 
-func (b *Bot) startStopTorrents(ctx context.Context, m *tgbotapi.Message, args string,
-	op func(context.Context, transmission.Identifier) error) tgbotapi.Chattable {
-	var target transmission.Identifier
-
-	if args != "" {
-		ids := strings.Split(args, " ")
-		targets := make([]transmission.SingularIdentifier, 0)
-		for _, i := range ids {
-			i = strings.TrimSpace(i)
-			if i == "" {
-				continue
-			}
-			id, err := strconv.Atoi(i)
-			if err != nil {
-				return replyError(m, err)
-			}
-			targets = append(targets, transmission.ID(id))
-		}
-		if len(targets) > 0 {
-			target = transmission.IDs(targets...)
-		}
-	}
-	if err := op(ctx, target); err != nil {
-		return replyError(m, err)
+func getTorrentIDs(args string) (transmission.Identifier, error) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return transmission.All(), nil
 	}
 
-	return replyText(m, "Done 😎")
+	ids := strings.Split(args, " ")
+	targets := make([]transmission.SingularIdentifier, 0)
+	for _, i := range ids {
+		i = strings.TrimSpace(i)
+		if i == "" {
+			continue
+		}
+		id, err := strconv.Atoi(i)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, transmission.ID(id))
+	}
+	if len(targets) == 0 {
+		return transmission.All(), nil
+	}
+
+	return transmission.IDs(targets...), nil
 }
 
-func (b *Bot) listTorrents(ctx context.Context, m *tgbotapi.Message, args string) tgbotapi.Chattable {
+func (b *Bot) resumeTorrents(ctx context.Context, m *tgbotapi.Message, args string) (tgbotapi.Chattable, error) {
+	ids, err := getTorrentIDs(args)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.trans.StartTorrents(ctx, ids); err != nil {
+		return nil, err
+	}
+
+	return reply(m, withText("Done 😎")), nil
+}
+
+func (b *Bot) stopTorrents(ctx context.Context, m *tgbotapi.Message, args string) (tgbotapi.Chattable, error) {
+	ids, err := getTorrentIDs(args)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.trans.StopTorrents(ctx, ids); err != nil {
+		return nil, err
+	}
+
+	return reply(m, withText("Done 😎")), nil
+}
+
+func (b *Bot) listTorrents(ctx context.Context, m *tgbotapi.Message, args string) (tgbotapi.Chattable, error) {
 	torrents, err := b.trans.GetTorrents(ctx, transmission.All(),
 		transmission.TorrentFieldID,
 		transmission.TorrentFieldName,
@@ -152,7 +183,7 @@ func (b *Bot) listTorrents(ctx context.Context, m *tgbotapi.Message, args string
 		transmission.TorrentFieldETA,
 	)
 	if err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
 	type torrent struct {
@@ -202,8 +233,65 @@ func (b *Bot) listTorrents(ctx context.Context, m *tgbotapi.Message, args string
 	}
 	buf := new(strings.Builder)
 	if err := listTemplate.Execute(buf, &res); err != nil {
-		return replyError(m, err)
+		return nil, err
 	}
 
-	return replyText(m, buf.String(), withMarkdownV2())
+	return reply(m, withText(buf.String()), withMarkdownV2()), nil
+}
+
+func (b *Bot) removeTorrents(ctx context.Context, m *tgbotapi.Message, args string) (tgbotapi.Chattable, error) {
+	ids, err := getTorrentIDs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	torrents, err := b.trans.GetTorrents(ctx, ids,
+		transmission.TorrentFieldID,
+		transmission.TorrentFieldHash,
+		transmission.TorrentFieldName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(torrents) == 0 {
+		return reply(m, withText("Don't have any matching torrents")), nil
+	}
+
+	type torrent struct {
+		ID   transmission.ID
+		Name string
+	}
+	tors := make([]torrent, 0, len(torrents))
+	hashes := make([]transmission.SingularIdentifier, 0, len(torrents))
+	for _, t := range torrents {
+		tors = append(tors, torrent{ID: t.ID, Name: escapeMarkdownV2(t.Name)})
+		hashes = append(hashes, t.Hash)
+	}
+
+	buf := new(strings.Builder)
+	if err := removeTemplate.Execute(buf, tors); err != nil {
+		return nil, err
+	}
+
+	id := b.addCallbackHandler(func(ctx context.Context, q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+		var withData bool
+		switch q.Data {
+		case "yes":
+			withData = true
+		case "no":
+		default:
+			return edit(q.Message, withText("Ok, not gonna remove any torrents")), nil
+		}
+		if err := b.trans.RemoveTorrents(ctx, transmission.IDs(hashes...), withData); err != nil {
+			return nil, err
+		}
+
+		return edit(q.Message, withText("Done 😎")), nil
+	})
+
+	return reply(m, withText(buf.String()), withMarkdownV2(), withInlineKeyboard(tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Yes", id+"yes"),
+		tgbotapi.NewInlineKeyboardButtonData("No", id+"no"),
+		tgbotapi.NewInlineKeyboardButtonData("Cancel", id+"cancel"),
+	))), nil
 }

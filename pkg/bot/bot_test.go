@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +101,60 @@ func torrentMatcher(content []byte) *customMatcher {
 	}
 }
 
+func editMatcher(chatID int64, msgID int, re string) *customMatcher {
+	return &customMatcher{
+		name: fmt.Sprintf("Edit of the message %d to %d matches re '%s'", msgID, chatID, re),
+		matches: func(x interface{}) bool {
+			msg, ok := x.(tgbotapi.EditMessageTextConfig)
+			if !ok {
+				return false
+			}
+			r := regexp.MustCompile(re)
+
+			return msg.BaseEdit.ChatID == chatID && msg.BaseEdit.MessageID == msgID && r.MatchString(msg.Text)
+		},
+	}
+}
+
+func inlineKeyboardMatcher(rows ...[]tgbotapi.InlineKeyboardButton) *customMatcher {
+	return &customMatcher{
+		name: "Message has inline keyboard with the given keys",
+		matches: func(x interface{}) bool {
+			var markup *tgbotapi.InlineKeyboardMarkup
+
+			switch m := x.(type) {
+			case tgbotapi.MessageConfig:
+				if k, ok := m.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup); ok {
+					markup = &k
+				}
+			case tgbotapi.EditMessageTextConfig:
+				markup = m.ReplyMarkup
+			}
+			if markup == nil {
+				return false
+			}
+			if len(rows) != len(markup.InlineKeyboard) {
+				return false
+			}
+			for i := 0; i < len(rows); i++ {
+				if len(rows[i]) != len(markup.InlineKeyboard[i]) {
+					return false
+				}
+				for j := 0; j < len(rows[i]); j++ {
+					if rows[i][j].Text != markup.InlineKeyboard[i][j].Text {
+						return false
+					}
+					if *rows[i][j].CallbackData != *markup.InlineKeyboard[i][j].CallbackData {
+						return false
+					}
+				}
+			}
+
+			return true
+		},
+	}
+}
+
 type updateGenerator struct {
 	id int
 }
@@ -108,7 +164,24 @@ type update struct {
 }
 
 func (u *update) chatID() int64 {
+	if u.Message == nil {
+		return 0
+	}
 	return u.Message.Chat.ID
+}
+
+func (u *update) messageID() int {
+	if u.Message == nil {
+		return 0
+	}
+	return u.Message.MessageID
+}
+
+func (u *update) callbackID() string {
+	if u.CallbackQuery == nil {
+		return ""
+	}
+	return u.CallbackQuery.ID
 }
 
 func (u *updateGenerator) newMessage(opts ...func(*tgbotapi.Update)) update {
@@ -117,6 +190,7 @@ func (u *updateGenerator) newMessage(opts ...func(*tgbotapi.Update)) update {
 	upd := tgbotapi.Update{
 		UpdateID: u.id,
 		Message: &tgbotapi.Message{
+			MessageID: rand.Int(), //nolint:gosec
 			Chat: &tgbotapi.Chat{
 				ID: 123,
 			},
@@ -132,13 +206,39 @@ func (u *updateGenerator) newMessage(opts ...func(*tgbotapi.Update)) update {
 	return update{upd}
 }
 
+func (u *updateGenerator) newCallback(msg *tgbotapi.Message, data string, opts ...func(*tgbotapi.Update)) update {
+	u.id++
+
+	upd := tgbotapi.Update{
+		UpdateID: u.id,
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:   strconv.Itoa(rand.Int()), //nolint:gosec
+			Data: data,
+			From: &tgbotapi.User{
+				UserName: "admin",
+			},
+			Message: msg,
+		},
+	}
+	for _, opt := range opts {
+		opt(&upd)
+	}
+
+	return update{upd}
+}
+
 func withUser(user string) func(u *tgbotapi.Update) {
 	return func(u *tgbotapi.Update) {
-		u.Message.From.UserName = user
+		switch {
+		case u.Message != nil:
+			u.Message.From.UserName = user
+		case u.CallbackQuery != nil:
+			u.CallbackQuery.From.UserName = user
+		}
 	}
 }
 
-func withText(text string) func(u *tgbotapi.Update) {
+func withMsgText(text string) func(u *tgbotapi.Update) {
 	return func(u *tgbotapi.Update) {
 		u.Message.Text = text
 	}
@@ -231,7 +331,7 @@ func TestAddTorrent_text(t *testing.T) {
 	run, tg, tr := newTestBot(t)
 	gen := new(updateGenerator)
 
-	update := gen.newMessage(withText("magnet:/"))
+	update := gen.newMessage(withMsgText("magnet:/"))
 
 	addTorrentCall := tr.EXPECT().AddTorrent(gomock.AssignableToTypeOf(ctxType), &transmission.AddTorrentReq{
 		URL: transmission.OptString("magnet:/"),
@@ -447,4 +547,43 @@ func TestList_filter(t *testing.T) {
 	tg.EXPECT().Send(messageMatcher(update.chatID(), `^(?s)Here is what I got:\s+\\<\*2\*\\> \*Second torrent\*`))
 
 	run(update)
+}
+
+func TestRemoveTorrent(t *testing.T) {
+	cbID := strings.Repeat("0", callbackIDLen)
+	run, tg, tr := newTestBot(t, withCallbackIDGenerator(func() string {
+		return cbID
+	}))
+
+	gen := new(updateGenerator)
+
+	msg := gen.newMessage(withCommand("remove", "1"))
+	cb := gen.newCallback(msg.Message, cbID+"yes")
+	updates := []update{msg, cb}
+
+	getCall := tr.EXPECT().GetTorrents(gomock.AssignableToTypeOf(ctxType), transmission.IDs(transmission.ID(1)),
+		transmission.TorrentFieldID,
+		transmission.TorrentFieldHash,
+		transmission.TorrentFieldName,
+	).Return([]*transmission.Torrent{
+		{
+			ID:   1,
+			Hash: "123",
+			Name: "first torrent",
+		},
+	}, nil)
+	askCall := tg.EXPECT().Send(gomock.All(
+		messageMatcher(msg.chatID(), `^(?s)I'm going to remove the following torrents:\s+`+`\\<\*1\*\\> \*first torrent\*`),
+		inlineKeyboardMatcher(tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Yes", cbID+"yes"),
+			tgbotapi.NewInlineKeyboardButtonData("No", cbID+"no"),
+			tgbotapi.NewInlineKeyboardButtonData("Cancel", cbID+"cancel")),
+		),
+	)).After(getCall)
+	ackCall := tg.EXPECT().AnswerCallbackQuery(tgbotapi.NewCallback(cb.callbackID(), "")).After(askCall)
+	removeCall := tr.EXPECT().RemoveTorrents(gomock.AssignableToTypeOf(ctxType),
+		transmission.IDs(transmission.Hash("123")), true).After(ackCall)
+	tg.EXPECT().Send(editMatcher(msg.chatID(), msg.messageID(), "Done")).After(removeCall)
+
+	run(updates...)
 }

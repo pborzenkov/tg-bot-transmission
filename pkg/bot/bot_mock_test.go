@@ -36,6 +36,21 @@ func (m *MockTelegram) EXPECT() *MockTelegramMockRecorder {
 	return m.recorder
 }
 
+// AnswerCallbackQuery mocks base method
+func (m *MockTelegram) AnswerCallbackQuery(arg0 tgbotapi.CallbackConfig) (tgbotapi.APIResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnswerCallbackQuery", arg0)
+	ret0, _ := ret[0].(tgbotapi.APIResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AnswerCallbackQuery indicates an expected call of AnswerCallbackQuery
+func (mr *MockTelegramMockRecorder) AnswerCallbackQuery(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnswerCallbackQuery", reflect.TypeOf((*MockTelegram)(nil).AnswerCallbackQuery), arg0)
+}
+
 // GetFileDirectURL mocks base method
 func (m *MockTelegram) GetFileDirectURL(arg0 string) (string, error) {
 	m.ctrl.T.Helper()
@@ -197,6 +212,20 @@ func (m *MockTransmission) IsPortOpen(arg0 context.Context) (bool, error) {
 func (mr *MockTransmissionMockRecorder) IsPortOpen(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPortOpen", reflect.TypeOf((*MockTransmission)(nil).IsPortOpen), arg0)
+}
+
+// RemoveTorrents mocks base method
+func (m *MockTransmission) RemoveTorrents(arg0 context.Context, arg1 transmission.Identifier, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveTorrents", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveTorrents indicates an expected call of RemoveTorrents
+func (mr *MockTransmissionMockRecorder) RemoveTorrents(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveTorrents", reflect.TypeOf((*MockTransmission)(nil).RemoveTorrents), arg0, arg1, arg2)
 }
 
 // SetSession mocks base method
