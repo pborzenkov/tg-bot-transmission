@@ -28,7 +28,11 @@ type optionable interface {
 	setInlineKeyboard(tgbotapi.InlineKeyboardMarkup)
 }
 
-type replyOption func(optionable)
+type repliable interface {
+	setReplyMsgID(int)
+}
+
+type replyOption func(*tgbotapi.Message, optionable)
 
 type message struct {
 	tgbotapi.MessageConfig
@@ -44,6 +48,10 @@ func (m *message) setParseMode(mode string) {
 
 func (m *message) setInlineKeyboard(kb tgbotapi.InlineKeyboardMarkup) {
 	m.MessageConfig.ReplyMarkup = kb
+}
+
+func (m *message) setReplyMsgID(id int) {
+	m.MessageConfig.ReplyToMessageID = id
 }
 
 type editMessage struct {
@@ -67,7 +75,7 @@ func reply(m *tgbotapi.Message, opts ...replyOption) tgbotapi.Chattable {
 		MessageConfig: tgbotapi.NewMessage(m.Chat.ID, ""),
 	}
 	for _, opt := range opts {
-		opt(&msg)
+		opt(m, &msg)
 	}
 	return msg.MessageConfig
 }
@@ -77,13 +85,13 @@ func edit(m *tgbotapi.Message, opts ...replyOption) tgbotapi.Chattable {
 		EditMessageTextConfig: tgbotapi.NewEditMessageText(m.Chat.ID, m.MessageID, ""),
 	}
 	for _, opt := range opts {
-		opt(&edt)
+		opt(m, &edt)
 	}
 	return edt.EditMessageTextConfig
 }
 
 func withText(text string) replyOption {
-	return func(msg optionable) {
+	return func(_ *tgbotapi.Message, msg optionable) {
 		msg.setText(text)
 	}
 }
@@ -93,13 +101,21 @@ func withError(err error) replyOption {
 }
 
 func withMarkdownV2() replyOption {
-	return func(msg optionable) {
+	return func(_ *tgbotapi.Message, msg optionable) {
 		msg.setParseMode("MarkdownV2")
 	}
 }
 
+func withQuoteMessage() replyOption {
+	return func(m *tgbotapi.Message, msg optionable) {
+		if r, ok := msg.(repliable); ok {
+			r.setReplyMsgID(m.MessageID)
+		}
+	}
+}
+
 func withInlineKeyboard(rows ...[]tgbotapi.InlineKeyboardButton) replyOption {
-	return func(msg optionable) {
+	return func(_ *tgbotapi.Message, msg optionable) {
 		msg.setInlineKeyboard(tgbotapi.NewInlineKeyboardMarkup(rows...))
 	}
 }

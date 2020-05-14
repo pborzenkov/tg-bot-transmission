@@ -36,6 +36,23 @@ func TestConfig(t *testing.T) {
 			opts: []Option{WithSetCommands()},
 			want: &config{SetCommands: true},
 		},
+		{
+			name: "locations",
+			opts: []Option{
+				WithLocations(Location{Name: "loc1", Path: "/download/loc1"}),
+				WithLocations(
+					Location{Name: "loc2", Path: "/download/loc2"},
+					Location{Name: "loc3", Path: "/download/loc3"},
+				),
+			},
+			want: &config{
+				Locations: []Location{
+					{Name: "loc1", Path: "/download/loc1"},
+					{Name: "loc2", Path: "/download/loc2"},
+					{Name: "loc3", Path: "/download/loc3"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

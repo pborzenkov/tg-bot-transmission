@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -44,14 +45,63 @@ Should I remove their data files as well?`,
 
 func (b *Bot) addTorrent(ctx context.Context, m *tgbotapi.Message,
 	req *transmission.AddTorrentReq) (tgbotapi.Chattable, error) {
-	torrent, err := b.trans.AddTorrent(ctx, req)
-	if err != nil {
-		return nil, err
+	if len(b.locations) == 0 {
+		torrent, err := b.trans.AddTorrent(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		return reply(m,
+			withText(fmt.Sprintf("👌 \\<*%d*\\> %s", torrent.ID, escapeMarkdownV2(torrent.Name))),
+			withMarkdownV2(),
+			withQuoteMessage(),
+		), nil
 	}
 
-	return reply(m,
-		withText(fmt.Sprintf("👌 \\<*%d*\\> %s", torrent.ID, escapeMarkdownV2(torrent.Name))),
-		withMarkdownV2(),
+	id := b.addCallbackHandler(func(ctx context.Context, q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+		var path string
+		switch q.Data {
+		case "cancel":
+			return edit(q.Message, withText("Ok, not gonna download it")), nil
+		case "other":
+		default:
+			var ok bool
+			path, ok = b.locations[q.Data]
+			if !ok {
+				return nil, errors.New("I don't know this location") //nolint:stylecheck
+			}
+
+			req.DownloadDirectory = transmission.OptString(path)
+		}
+		torrent, err := b.trans.AddTorrent(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		if path != "" {
+			path = fmt.Sprintf("\n\nWill be downloaded to *%s*", escapeMarkdownV2(path))
+		}
+		return edit(
+			q.Message,
+			withText(fmt.Sprintf("👌 \\<*%d*\\> %s%s",
+				torrent.ID, escapeMarkdownV2(torrent.Name), path)),
+			withMarkdownV2()), nil
+	})
+
+	row := make([]tgbotapi.InlineKeyboardButton, 0, len(b.locations)+1)
+	for n := range b.locations {
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(n, id+n))
+	}
+	row = append(row, tgbotapi.NewInlineKeyboardButtonData("Other", id+"other"))
+	return reply(
+		m,
+		withText("Ok, gonna queue it for download. But first tell me what is it?"),
+		withInlineKeyboard(
+			row,
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Cancel", id+"cancel"),
+			)),
+		withQuoteMessage(),
 	), nil
 }
 

@@ -1,8 +1,10 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -52,6 +54,8 @@ type Bot struct {
 	commands          map[string]*botCommand
 	shouldSetCommands bool
 
+	locations map[string]string
+
 	newID     func() string
 	mu        sync.Mutex
 	callbacks map[string]callbackHandler
@@ -87,8 +91,13 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 		admin:             conf.AllowedUser,
 		shouldSetCommands: conf.SetCommands,
 
+		locations: make(map[string]string),
+
 		newID:     conf.NewCallbackID,
 		callbacks: make(map[string]callbackHandler),
+	}
+	for _, l := range conf.Locations {
+		b.locations[l.Name] = l.Path
 	}
 
 	b.commands = map[string]*botCommand{
@@ -289,8 +298,13 @@ func (b *Bot) handleDocument(ctx context.Context, m *tgbotapi.Message) tgbotapi.
 	}
 	defer resp.Body.Close()
 
+	data := new(bytes.Buffer)
+	if _, err := io.Copy(data, resp.Body); err != nil {
+		return reply(m, withError(err))
+	}
+
 	r, err := b.addTorrent(ctx, m, &transmission.AddTorrentReq{
-		Meta: resp.Body,
+		Meta: data,
 	})
 	if err != nil {
 		return reply(m, withError(err))
@@ -317,7 +331,7 @@ func (b *Bot) addCallbackHandler(fn callbackHandlerFn) string {
 
 func getCallbackID(cb *tgbotapi.CallbackQuery) string {
 	var id string
-	if len(cb.Data) > 36 {
+	if len(cb.Data) > callbackIDLen {
 		id = cb.Data[:callbackIDLen]
 		cb.Data = cb.Data[callbackIDLen:]
 	}

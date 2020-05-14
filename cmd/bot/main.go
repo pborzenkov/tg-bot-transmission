@@ -24,6 +24,7 @@ type config struct {
 	AllowUser       string
 	TransmissionURL string
 	Verbose         bool
+	Locations       []bot.Location
 }
 
 func (c *config) command() *ffcli.Command {
@@ -33,6 +34,8 @@ func (c *config) command() *ffcli.Command {
 		"Telegram username that's allowed to control the bot")
 	fs.StringVar(&c.TransmissionURL, "transmission.url", "http://localhost:9091",
 		"Transmission RPC server URL")
+	fs.Var(newLocationsValue(&c.Locations), "data.location",
+		"Data locations for specific data types (NAME:PATH)")
 	fs.BoolVar(&c.Verbose, "verbose", false, "Enable verbose logging")
 
 	root := &ffcli.Command{
@@ -41,6 +44,7 @@ func (c *config) command() *ffcli.Command {
 		FlagSet:    fs,
 		Options: []ff.Option{
 			ff.WithEnvVarPrefix("BOT"),
+			ff.WithEnvVarSplit(","),
 		},
 		Exec: c.exec,
 	}
@@ -82,6 +86,7 @@ func (c *config) exec(ctx context.Context, args []string) error {
 		bot.WithLogger(log),
 		bot.WithAllowedUser(c.AllowUser),
 		bot.WithSetCommands(),
+		bot.WithLocations(c.Locations...),
 	).Run(ctx)
 
 	return nil

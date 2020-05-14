@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pborzenkov/tg-bot-transmission/pkg/bot"
 )
 
 func TestConfig(t *testing.T) {
@@ -21,12 +22,18 @@ func TestConfig(t *testing.T) {
 				"-telegram.api-token", "abcde",
 				"-telegram.allow-user", "user1",
 				"-transmission.url", "http://example.com:1234",
+				"-data.location", "loc1:/path/to/loc1",
+				"-data.location", "loc2:/path/to/loc2",
 			},
 			want: &config{
 				Verbose:         true,
 				APIToken:        "abcde",
 				AllowUser:       "user1",
 				TransmissionURL: "http://example.com:1234",
+				Locations: []bot.Location{
+					{Name: "loc1", Path: "/path/to/loc1"},
+					{Name: "loc2", Path: "/path/to/loc2"},
+				},
 			},
 		},
 		{
@@ -36,12 +43,17 @@ func TestConfig(t *testing.T) {
 				"BOT_TELEGRAM_API_TOKEN", "abcde",
 				"BOT_TELEGRAM_ALLOW_USER", "user1",
 				"BOT_TRANSMISSION_URL", "http://example.com:1234",
+				"BOT_DATA_LOCATION", "loc1:/path/to/loc1,loc2:/path/to/loc2",
 			},
 			want: &config{
 				Verbose:         true,
 				APIToken:        "abcde",
 				AllowUser:       "user1",
 				TransmissionURL: "http://example.com:1234",
+				Locations: []bot.Location{
+					{Name: "loc1", Path: "/path/to/loc1"},
+					{Name: "loc2", Path: "/path/to/loc2"},
+				},
 			},
 		},
 	}

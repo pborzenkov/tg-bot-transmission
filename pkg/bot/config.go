@@ -6,11 +6,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// Location is a named location for torrent contents.
+type Location struct {
+	Name string
+	Path string
+}
+
 type config struct {
-	Log           Logger
-	AllowedUser   string
-	HTTPClient    *http.Client
-	SetCommands   bool
+	Log         Logger
+	AllowedUser string
+	HTTPClient  *http.Client
+	SetCommands bool
+	Locations   []Location
+
+	// only for tests
 	NewCallbackID func() string
 }
 
@@ -66,6 +75,13 @@ func WithHTTPClient(client *http.Client) Option {
 func WithSetCommands() Option {
 	return optionFunc(func(c *config) {
 		c.SetCommands = true
+	})
+}
+
+// WithLocations adds new torrent contents locations.
+func WithLocations(l ...Location) Option {
+	return optionFunc(func(c *config) {
+		c.Locations = append(c.Locations, l...)
 	})
 }
 

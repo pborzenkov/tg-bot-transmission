@@ -69,7 +69,15 @@ func (m *customMatcher) String() string {
 	return m.name
 }
 
-func messageMatcher(chatID int64, re string) *customMatcher {
+type msgMatchOption func(*tgbotapi.MessageConfig) bool
+
+func hasReplyMsgID(id int) msgMatchOption {
+	return func(msg *tgbotapi.MessageConfig) bool {
+		return msg.ReplyToMessageID == id
+	}
+}
+
+func messageMatcher(chatID int64, re string, matches ...msgMatchOption) *customMatcher {
 	return &customMatcher{
 		name: fmt.Sprintf("Message to %d matches re '%s'", chatID, re),
 		matches: func(x interface{}) bool {
@@ -79,7 +87,17 @@ func messageMatcher(chatID int64, re string) *customMatcher {
 			}
 			r := regexp.MustCompile(re)
 
-			return msg.BaseChat.ChatID == chatID && r.MatchString(msg.Text)
+			if msg.BaseChat.ChatID != chatID || !r.MatchString(msg.Text) {
+				return false
+			}
+
+			for _, match := range matches {
+				if !match(&msg) {
+					return false
+				}
+			}
+
+			return true
 		},
 	}
 }
@@ -340,9 +358,57 @@ func TestAddTorrent_text(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\<\*1\*\\> new fancy torrent`)).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(
+		update.chatID(),
+		`\\<\*1\*\\> new fancy torrent`,
+		hasReplyMsgID(update.messageID()),
+	)).After(addTorrentCall)
 
 	run(update)
+}
+
+func TestAddTorrent_locations(t *testing.T) {
+	cbID := strings.Repeat("0", callbackIDLen)
+	run, tg, tr := newTestBot(t,
+		WithLocations(
+			Location{Name: "loc1", Path: "/path/to/loc1"},
+			Location{Name: "loc2", Path: "/path/to/loc2"},
+		),
+		withCallbackIDGenerator(func() string { return cbID }),
+	)
+
+	gen := new(updateGenerator)
+
+	msg := gen.newMessage(withMsgText("magnet:/"))
+	cb := gen.newCallback(msg.Message, cbID+"loc1")
+	updates := []update{msg, cb}
+
+	askCall := tg.EXPECT().Send(gomock.All(
+		messageMatcher(msg.chatID(), `^(?s)Ok, gonna queue it for download`),
+		inlineKeyboardMatcher(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("loc1", cbID+"loc1"),
+				tgbotapi.NewInlineKeyboardButtonData("loc2", cbID+"loc2"),
+				tgbotapi.NewInlineKeyboardButtonData("Other", cbID+"other"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Cancel", cbID+"cancel"),
+			),
+		),
+	))
+	tg.EXPECT().AnswerCallbackQuery(tgbotapi.NewCallback(cb.callbackID(), "")).After(askCall)
+	addCall := tr.EXPECT().AddTorrent(gomock.AssignableToTypeOf(ctxType), &transmission.AddTorrentReq{
+		URL:               transmission.OptString("magnet:/"),
+		DownloadDirectory: transmission.OptString("/path/to/loc1"),
+	}).Return(&transmission.NewTorrent{
+		ID:   transmission.ID(1),
+		Hash: transmission.Hash("abc"),
+		Name: "new fancy torrent",
+	}, nil).After(askCall)
+	tg.EXPECT().Send(editMatcher(msg.chatID(), msg.messageID(),
+		`(?s)\\<\*1\*\\> new fancy torrent.*/path/to/loc1`)).After(addCall)
+
+	run(updates...)
 }
 
 func TestAddTorrent_file(t *testing.T) {
@@ -374,8 +440,11 @@ func TestAddTorrent_file(t *testing.T) {
 		Hash: transmission.Hash("abc"),
 		Name: "new fancy torrent",
 	}, nil).After(getFileCall)
-	tg.EXPECT().Send(messageMatcher(update.chatID(), `\\<\*1\*\\> new fancy torrent`)).
-		After(getFileCall).After(addTorrentCall)
+	tg.EXPECT().Send(messageMatcher(
+		update.chatID(),
+		`\\<\*1\*\\> new fancy torrent`,
+		hasReplyMsgID(update.messageID()),
+	)).After(getFileCall).After(addTorrentCall)
 
 	run(update)
 }
@@ -580,9 +649,9 @@ func TestRemoveTorrent(t *testing.T) {
 			tgbotapi.NewInlineKeyboardButtonData("Cancel", cbID+"cancel")),
 		),
 	)).After(getCall)
-	ackCall := tg.EXPECT().AnswerCallbackQuery(tgbotapi.NewCallback(cb.callbackID(), "")).After(askCall)
+	tg.EXPECT().AnswerCallbackQuery(tgbotapi.NewCallback(cb.callbackID(), "")).After(askCall)
 	removeCall := tr.EXPECT().RemoveTorrents(gomock.AssignableToTypeOf(ctxType),
-		transmission.IDs(transmission.Hash("123")), true).After(ackCall)
+		transmission.IDs(transmission.Hash("123")), true).After(askCall)
 	tg.EXPECT().Send(editMatcher(msg.chatID(), msg.messageID(), "Done")).After(removeCall)
 
 	run(updates...)
