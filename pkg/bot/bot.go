@@ -34,7 +34,7 @@ type Transmission interface {
 	AddTorrent(context.Context, *transmission.AddTorrentReq) (*transmission.NewTorrent, error)
 	IsPortOpen(context.Context) (bool, error)
 	GetSessionStats(context.Context) (*transmission.SessionStats, error)
-	GetSession(context.Context) (*transmission.Session, error)
+	GetSession(context.Context, ...transmission.SessionField) (*transmission.Session, error)
 	SetSession(context.Context, *transmission.SetSessionReq) error
 	StartTorrents(context.Context, transmission.Identifier) error
 	StopTorrents(context.Context, transmission.Identifier) error

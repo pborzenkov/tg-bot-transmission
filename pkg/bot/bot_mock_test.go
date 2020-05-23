@@ -150,18 +150,23 @@ func (mr *MockTransmissionMockRecorder) AddTorrent(arg0, arg1 interface{}) *gomo
 }
 
 // GetSession mocks base method
-func (m *MockTransmission) GetSession(arg0 context.Context) (*transmission.Session, error) {
+func (m *MockTransmission) GetSession(arg0 context.Context, arg1 ...transmission.SessionField) (*transmission.Session, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSession", arg0)
+	varargs := []interface{}{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSession", varargs...)
 	ret0, _ := ret[0].(*transmission.Session)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetSession indicates an expected call of GetSession
-func (mr *MockTransmissionMockRecorder) GetSession(arg0 interface{}) *gomock.Call {
+func (mr *MockTransmissionMockRecorder) GetSession(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSession", reflect.TypeOf((*MockTransmission)(nil).GetSession), arg0)
+	varargs := append([]interface{}{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSession", reflect.TypeOf((*MockTransmission)(nil).GetSession), varargs...)
 }
 
 // GetSessionStats mocks base method

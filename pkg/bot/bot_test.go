@@ -465,9 +465,10 @@ func TestStats(t *testing.T) {
 			Uploaded:   2415919104,
 		},
 	}, nil)
-	tr.EXPECT().GetSession(gomock.AssignableToTypeOf(ctxType)).Return(&transmission.Session{
-		TurtleEnabled: false,
-	}, nil)
+	tr.EXPECT().GetSession(gomock.AssignableToTypeOf(ctxType), transmission.SessionFieldTurtleEnabled).
+		Return(&transmission.Session{
+			TurtleEnabled: false,
+		}, nil)
 	tg.EXPECT().Send(
 		messageMatcher(update.chatID(), `^↓\*2\\\.0 MiB/s\* ↑\*1\\\.0 MiB/s\* 🚀   `+
 			`↻\*3\* ⊗\*10\*   ↓\*1\\\.0 GiB\* ↑\*2\\\.3 GiB\* ☯\*2\\\.25\*$`,

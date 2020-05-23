@@ -124,7 +124,7 @@ func (b *Bot) stats(ctx context.Context, m *tgbotapi.Message) (tgbotapi.Chattabl
 	if err != nil {
 		return nil, err
 	}
-	session, err := b.trans.GetSession(ctx)
+	session, err := b.trans.GetSession(ctx, transmission.SessionFieldTurtleEnabled)
 	if err != nil {
 		return nil, err
 	}
