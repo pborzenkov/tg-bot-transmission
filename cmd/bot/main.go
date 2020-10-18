@@ -20,11 +20,13 @@ var (
 )
 
 type config struct {
-	APIToken        string
-	AllowUser       string
-	TransmissionURL string
-	Verbose         bool
-	Locations       []bot.Location
+	APIToken         string
+	AllowUser        string
+	TransmissionURL  string
+	TransmissionUser string
+	TransmissionPass string
+	Verbose          bool
+	Locations        []bot.Location
 }
 
 func (c *config) command() *ffcli.Command {
@@ -34,6 +36,8 @@ func (c *config) command() *ffcli.Command {
 		"Telegram username that's allowed to control the bot")
 	fs.StringVar(&c.TransmissionURL, "transmission.url", "http://localhost:9091",
 		"Transmission RPC server URL")
+	fs.StringVar(&c.TransmissionUser, "transmission.username", "", "Transmission RPC username")
+	fs.StringVar(&c.TransmissionPass, "transmission.password", "", "Transmission RPC password")
 	fs.Var(newLocationsValue(&c.Locations), "data.location",
 		"Data locations for specific data types (NAME:PATH)")
 	fs.BoolVar(&c.Verbose, "verbose", false, "Enable verbose logging")
@@ -78,7 +82,12 @@ func (c *config) exec(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("tgbotapi.NewBotAPI: %v", err)
 	}
-	trans, err := transmission.New(c.TransmissionURL)
+
+	var options []transmission.Option
+	if c.TransmissionUser != "" || c.TransmissionPass != "" {
+		options = append(options, transmission.WithAuth(c.TransmissionUser, c.TransmissionPass))
+	}
+	trans, err := transmission.New(c.TransmissionURL, options...)
 	if err != nil {
 		return fmt.Errorf("transmission.New: %v", err)
 	}
