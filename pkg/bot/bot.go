@@ -54,7 +54,8 @@ type Bot struct {
 	commands          map[string]*botCommand
 	shouldSetCommands bool
 
-	locations map[string]string
+	locations      map[string]string
+	locationsOrder []string
 
 	newID     func() string
 	mu        sync.Mutex
@@ -91,13 +92,15 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 		admin:             conf.AllowedUser,
 		shouldSetCommands: conf.SetCommands,
 
-		locations: make(map[string]string),
+		locations:      make(map[string]string, len(conf.Locations)),
+		locationsOrder: make([]string, 0, len(conf.Locations)),
 
 		newID:     conf.NewCallbackID,
 		callbacks: make(map[string]callbackHandler),
 	}
 	for _, l := range conf.Locations {
 		b.locations[l.Name] = l.Path
+		b.locationsOrder = append(b.locationsOrder, l.Name)
 	}
 
 	b.commands = map[string]*botCommand{

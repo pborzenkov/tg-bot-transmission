@@ -89,7 +89,7 @@ func (b *Bot) addTorrent(ctx context.Context, m *tgbotapi.Message,
 	})
 
 	row := make([]tgbotapi.InlineKeyboardButton, 0, len(b.locations)+1)
-	for n := range b.locations {
+	for _, n := range b.locationsOrder {
 		row = append(row, tgbotapi.NewInlineKeyboardButtonData(n, id+n))
 	}
 	row = append(row, tgbotapi.NewInlineKeyboardButtonData("Other", id+"other"))
