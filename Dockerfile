@@ -11,6 +11,8 @@ RUN CGO_ENABLED=0 go build \
 
 FROM gcr.io/distroless/static:nonroot
 
+LABEL org.opencontainers.image.source https://github.com/pborzenkov/tg-bot-transmission
+
 COPY --from=build /go/bin/bot /
 
 USER nonroot
