@@ -36,3 +36,19 @@ func (l *locationsValue) String() string {
 
 	return strings.Join(locs, ",")
 }
+
+type stringSliceValue []string
+
+func newStringSliceValue(s *[]string) *stringSliceValue {
+	return (*stringSliceValue)(s)
+}
+
+func (ss *stringSliceValue) Set(s string) error {
+	*ss = append(*ss, s)
+
+	return nil
+}
+
+func (ss *stringSliceValue) String() string {
+	return strings.Join(*ss, ",")
+}

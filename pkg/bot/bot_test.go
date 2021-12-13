@@ -30,7 +30,7 @@ func newTestBot(t *testing.T, opts ...Option) (func(...update), *MockTelegram, *
 
 	tg := NewMockTelegram(ctrl)
 	tr := NewMockTransmission(ctrl)
-	bot := New(tg, tr, append(opts, WithAllowedUser("admin"))...)
+	bot := New(tg, tr, append(opts, WithAllowedUsers("admin"))...)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return func(updates ...update) {

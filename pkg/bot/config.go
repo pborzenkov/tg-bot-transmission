@@ -13,11 +13,11 @@ type Location struct {
 }
 
 type config struct {
-	Log         Logger
-	AllowedUser string
-	HTTPClient  *http.Client
-	SetCommands bool
-	Locations   []Location
+	Log          Logger
+	AllowedUsers []string
+	HTTPClient   *http.Client
+	SetCommands  bool
+	Locations    []Location
 
 	// only for tests
 	NewCallbackID func() string
@@ -54,9 +54,9 @@ func WithLogger(l Logger) Option {
 
 // WithAllowedUser sets a username of the telegram account that is allowed to
 // control the bot.
-func WithAllowedUser(user string) Option {
+func WithAllowedUsers(users ...string) Option {
 	return optionFunc(func(c *config) {
-		c.AllowedUser = user
+		c.AllowedUsers = append(c.AllowedUsers, users...)
 	})
 }
 

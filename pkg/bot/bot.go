@@ -49,7 +49,8 @@ type Bot struct {
 	tg    Telegram
 	trans Transmission
 	http  *http.Client
-	admin string
+
+	admins map[string]struct{}
 
 	commands          map[string]*botCommand
 	shouldSetCommands bool
@@ -89,7 +90,7 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 		tg:                tg,
 		trans:             transmission,
 		http:              conf.HTTPClient,
-		admin:             conf.AllowedUser,
+		admins:            make(map[string]struct{}),
 		shouldSetCommands: conf.SetCommands,
 
 		locations:      make(map[string]string, len(conf.Locations)),
@@ -97,6 +98,9 @@ func New(tg Telegram, transmission Transmission, opts ...Option) *Bot {
 
 		newID:     conf.NewCallbackID,
 		callbacks: make(map[string]callbackHandler),
+	}
+	for _, u := range conf.AllowedUsers {
+		b.admins[u] = struct{}{}
 	}
 	for _, l := range conf.Locations {
 		b.locations[l.Name] = l.Path
@@ -245,7 +249,7 @@ func (b *Bot) processUpdate(ctx context.Context, u tgbotapi.Update) tgbotapi.Cha
 		return nil
 	}
 
-	if user.UserName != b.admin {
+	if _, ok := b.admins[user.UserName]; !ok {
 		return reply(u.Message, withText("Sorry, I don't know you..."))
 	}
 

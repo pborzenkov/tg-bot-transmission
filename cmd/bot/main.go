@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	Version string = "dev"
+	Version = "dev"
 )
 
 type config struct {
 	APIToken         string
-	AllowUser        string
+	AllowUsers       []string
 	TransmissionURL  string
 	TransmissionUser string
 	TransmissionPass string
@@ -32,7 +32,7 @@ type config struct {
 func (c *config) command() *ffcli.Command {
 	fs := flag.NewFlagSet("bot", flag.ExitOnError)
 	fs.StringVar(&c.APIToken, "telegram.api-token", "", "Telegram Bot API token")
-	fs.StringVar(&c.AllowUser, "telegram.allow-user", "",
+	fs.Var(newStringSliceValue(&c.AllowUsers), "telegram.allow-user",
 		"Telegram username that's allowed to control the bot")
 	fs.StringVar(&c.TransmissionURL, "transmission.url", "http://localhost:9091",
 		"Transmission RPC server URL")
@@ -93,7 +93,7 @@ func (c *config) exec(ctx context.Context, args []string) error {
 	}
 	bot.New(tg, trans,
 		bot.WithLogger(log),
-		bot.WithAllowedUser(c.AllowUser),
+		bot.WithAllowedUsers(c.AllowUsers...),
 		bot.WithSetCommands(),
 		bot.WithLocations(c.Locations...),
 	).Run(ctx)
